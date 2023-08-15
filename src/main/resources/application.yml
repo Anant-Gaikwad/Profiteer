@@ -1,0 +1,52 @@
+server:
+  port: 8081
+  
+spring:
+  jackson:
+    time-zone: Asia/Kolkata
+  mvc:
+    pathmatch:
+      matching-strategy: ant-path-matcher
+  datasource:
+    username: root
+    password: root
+    #password: money@rupee#password
+    #url: jdbc:mysql://127.0.0.1:3306/profiteer?createDatabaseIfNotExist=true&useSSL=false
+    url: jdbc:mysql://localhost:3306/profiteer?createDatabaseIfNotExist=true&useSSL=false
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 15
+      connection-timeout: 20000
+    tomcat:
+      max-active: 100
+      max-wait: 5000
+      min-idle: 10
+      max-idle: 15
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL5InnoDBDialect
+    show-sql: true
+    open-in-view: false
+  
+  application:
+    name: Famous-App-Service
+#################################################################################################################
+    
+email_template: OTP for your current transaction is {otp}.This OTP is valid for the next 5 minutes.Please do not share this OTP with anyone.FINOTP
+  
+apiKey: 4ea43ff76d4d4df19ad3ab80c2d5a77d
+userId: fintechpvtltd
+password: Fintech123?
+sendMethod: simpleMsg
+msgType: TEXT
+senderId: FINOTP
+SMSUrl: http://www.smsgateway.center/SMSApi/rest/send?
+ifsc_code_bank: http://api.techm.co.in/api/v1/ifsc/
+token_minutes_time: 30
+event_reboot_time: 10
+reffered_percentage: 10
