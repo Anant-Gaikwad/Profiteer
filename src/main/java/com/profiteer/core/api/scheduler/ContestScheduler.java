@@ -1,8 +1,11 @@
 package com.profiteer.core.api.scheduler;
 
-import java.util.*;
-import java.util.stream.Collectors;
-
+import com.profiteer.core.api.entity.*;
+import com.profiteer.core.api.repository.ContestDetailRepository;
+import com.profiteer.core.api.repository.ContestOrderDetailRepository;
+import com.profiteer.core.api.repository.ContestRepository;
+import com.profiteer.core.api.repository.ContestSearchCriteriaDao;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
@@ -10,24 +13,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
-import com.profiteer.core.api.entity.Contest;
-import com.profiteer.core.api.entity.ContestDetail;
-import com.profiteer.core.api.entity.ContestOrderDetail;
-import com.profiteer.core.api.entity.Status;
-import com.profiteer.core.api.repository.ContestDetailRepository;
-import com.profiteer.core.api.repository.ContestOrderDetailRepository;
-import com.profiteer.core.api.repository.ContestRepository;
-import com.profiteer.core.api.repository.ContestSearchCriteriaDao;
-
-import lombok.extern.slf4j.Slf4j;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.summingLong;
 
 @Component
 @Slf4j
 public class ContestScheduler {
 
+    private final Random random = new Random();
     List<Long> appUserList = Arrays.asList(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L);
     @Autowired
     private ContestRepository contestRepository;
@@ -38,11 +33,8 @@ public class ContestScheduler {
     @Autowired
     @Qualifier("taskScheduler")
     private TaskScheduler taskScheduler;
-
     @Autowired
     private ContestOrderDetailRepository contestOrderDetailRepository;
-
-    private final Random random = new Random();
 
     // @Scheduled(fixedDelay = 900000)
     public void createContest() {
@@ -85,11 +77,11 @@ public class ContestScheduler {
                     contestDetail.setContestId(contest.getContestId());
                     contestDetail.setContestDistributedAmount(0.0);
                     contestDetail.setContestProfitAmount(0.0);
-                    contestDetail.setFirstWinnerAmount(0.0);
-                    contestDetail.setSecondWinnerAmount(0.0);
-                    contestDetail.setThirdWinnerAmount(0.0);
+                    //contestDetail.setFirstWinnerAmount(0.0);
+                    //contestDetail.setSecondWinnerAmount(0.0);
+                    //contestDetail.setThirdWinnerAmount(0.0);
                     contestDetail.setStatus(Status.INPROCESS);
-                    contestDetail.setFourthWinnerAmount(0.0);
+                    //contestDetail.setFourthWinnerAmount(0.0);
                     contestDetail.setTotalContestAmount(0.0);
 
                     contestDetailRepository.save(contestDetail);
@@ -136,8 +128,8 @@ public class ContestScheduler {
 
             for (ContestDetail contestDetail : contestDetails) {
 
-                List<ContestOrderDetail> contestOrderDetails = contestSearchCriteriaDao.getContestOrderDetail(contestDetail.getContestId(), contestDetail.getId(), Status.INPROCESS, null);
-
+                //List<ContestOrderDetail> contestOrderDetails = contestSearchCriteriaDao.getContestOrderDetail(contestDetail.getContestId(), contestDetail.getId(), Status.INPROCESS, null);
+                List<ContestOrderDetail> contestOrderDetails = contestDetail.getOrderDetails();
                 if (CollectionUtils.isEmpty(contestOrderDetails)) {
                     contestDetail.setReason("No users played this contest");
                     contestDetail.setStatus(Status.COMPLETE);
@@ -158,14 +150,16 @@ public class ContestScheduler {
                 switch (originalUsers.size()) {
 
                     case 1:
-                        populateAllAutomatedUsersWinner(contestDetail, automatedUsers);
+                        List<ContestOrderDetail> finalAutomatedList1 = automatedUsers.stream().filter(x -> originalUsers.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
+                        populateAllAutomatedUsersWinner(contestDetail, finalAutomatedList1);
                         break;
 
                     case 2:
+                        List<ContestOrderDetail> finalAutomatedList2 = automatedUsers.stream().filter(x -> originalUsers.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
                         if (Objects.equals(originalUsers.get(0).getContestChooseNumber(), originalUsers.get(1).getContestChooseNumber())) {
-                            populateAllAutomatedUsersWinner(contestDetail, automatedUsers);
+                            populateAllAutomatedUsersWinner(contestDetail, finalAutomatedList2);
                         } else {
-                            populateOneUsersWinner(contestDetail, automatedUsers, originalUsers);
+                            populateOneUsersWinner(contestDetail, finalAutomatedList2, originalUsers);
                         }
                         break;
 
@@ -175,53 +169,72 @@ public class ContestScheduler {
                         Map<Long, List<ContestOrderDetail>> totalMap = originalUsers.stream().collect(groupingBy(ContestOrderDetail::getContestChooseNumber));
 
                         List<ContestOrderDetail> twoUserSelectedSameNumberList = totalMap.values().stream().filter(x -> x.size() > 1).flatMap(List::stream).collect(Collectors.toList());
-                         if (!CollectionUtils.isEmpty(twoUserSelectedSameNumberList)){
 
-                                List<Long> automatedTwoWinners = getRandomWinnerUsers(automatedUsers, 2);
-                                List<ContestOrderDetail> tempAutomatedList = automatedUsers.stream().filter(x -> x.getId().equals(automatedTwoWinners.get(0))).collect(Collectors.toList());
+                        if (!CollectionUtils.isEmpty(twoUserSelectedSameNumberList)) {
 
-                                List<Long> sameNumberUser = twoUserSelectedSameNumberList.stream().map(ContestOrderDetail::getId).collect(Collectors.toList());
-                                List<ContestOrderDetail> winnerUser = originalUsers.stream().filter(x -> !sameNumberUser.contains(x.getId())).collect(Collectors.toList());
-                                winnerUser.get(0).setUserWin(true);
-                                winnerUser.add(automatedUsers.stream().filter(x->x.getId().equals(automatedTwoWinners.get(1))).findFirst().get());
+                            List<ContestOrderDetail> finalAutomatedList3 = automatedUsers.stream().filter(x -> twoUserSelectedSameNumberList.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
 
-                                populateRandomOneUsersWinner(contestDetail, tempAutomatedList, winnerUser);
+                            List<Long> automatedTwoWinners = getRandomWinnerUsers(finalAutomatedList3, 2);
+                            List<ContestOrderDetail> tempAutomatedList = automatedUsers.stream().filter(x -> x.getId().equals(automatedTwoWinners.get(0))).collect(Collectors.toList());
 
-                        }else {
-                             //SC2  user might chose diff number
-                             List<Long> originalWinners = getRandomWinnerUsers(originalUsers, 1);
-                             List<Long> automatedTwoWinners = getRandomWinnerUsers(automatedUsers, 2);
+                            List<Long> sameNumberUser = twoUserSelectedSameNumberList.stream().map(ContestOrderDetail::getId).collect(Collectors.toList());
+                            List<ContestOrderDetail> winnerUser = originalUsers.stream().filter(x -> !sameNumberUser.contains(x.getId())).collect(Collectors.toList());
+                            winnerUser.get(0).setUserWin(true);
+                            winnerUser.add(automatedUsers.stream().filter(x -> x.getUserId().equals(automatedTwoWinners.get(1))).findFirst().get());
 
+                            populateRandomOneUsersWinner(contestDetail, tempAutomatedList, winnerUser);
 
-                             List<ContestOrderDetail> winnerUser = originalUsers.stream().filter(x -> originalWinners.contains(x.getId())).collect(Collectors.toList());
-                             winnerUser.get(0).setUserWin(true);
-                             winnerUser.add(automatedUsers.stream().filter(x->x.getId().equals(automatedTwoWinners.get(1))).findFirst().get());
-                             List<ContestOrderDetail> tempAutomatedList = automatedUsers.stream().filter(x -> x.getId().equals(automatedTwoWinners.get(0))).collect(Collectors.toList());
-                             populateRandomOneUsersWinner(contestDetail, tempAutomatedList, winnerUser);
+                        } else {
+                            //SC2  user might chose diff number
+                            List<ContestOrderDetail> finalAutomatedList3 = automatedUsers.stream().filter(x -> originalUsers.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
 
-                         }
-                         break;
+                            List<Long> originalWinners = getRandomWinnerUsers(originalUsers, 1);
+                            List<Long> automatedTwoWinners = getRandomWinnerUsers(finalAutomatedList3, 2);
+
+                            List<ContestOrderDetail> winnerUser = originalUsers.stream().filter(x -> originalWinners.contains(x.getUserId())).collect(Collectors.toList());
+                            winnerUser.get(0).setUserWin(true);
+                            winnerUser.add(automatedUsers.stream().filter(x -> x.getUserId().equals(automatedTwoWinners.get(1))).findFirst().get());
+                            List<ContestOrderDetail> tempAutomatedList = automatedUsers.stream().filter(x -> x.getId().equals(automatedTwoWinners.get(0))).collect(Collectors.toList());
+                            populateRandomOneUsersWinner(contestDetail, tempAutomatedList, winnerUser);
+
+                        }
+
+                        break;
 
                     case 4:
 
                         Map<Long, List<ContestOrderDetail>> fourUserMap = originalUsers.stream().collect(groupingBy(ContestOrderDetail::getContestChooseNumber));
 
-                        //SC1 pair of user selected same number
-                        // 1 1 2 2
-                        List<ContestOrderDetail> pairList = fourUserMap.values().stream().filter(x -> x.size() == 2).map(x-> x.stream().findFirst().get()).collect(Collectors.toList());
-                       if (pairList.size() ==2 ){
-                           List<Long> choseNumberList = pairList.stream().map(ContestOrderDetail::getContestChooseNumber).collect(Collectors.toList());
-                           Long randomWiningNumber = getRandomWiningNumber(choseNumberList, 1).get(0);
-                           List<ContestOrderDetail> twoUserHaveSameNumber = originalUsers.stream().filter(x -> x.getContestChooseNumber().equals(randomWiningNumber)).collect(Collectors.toList());
 
-                       }
+                        List<ContestOrderDetail> pairList = fourUserMap.values().stream().filter(x -> x.size() == 2).map(x -> x.stream().findFirst().get()).collect(Collectors.toList());
+                        if (pairList.size() == 2) {
+                            //SC1 pair of user selected same number
+                            // 1 1 2 2
+                            List<Long> choseNumberList = pairList.stream().map(ContestOrderDetail::getContestChooseNumber).collect(Collectors.toList());
+                            Long randomWiningNumber = getRandomWiningNumber(choseNumberList, 1).get(0);
+                            List<ContestOrderDetail> twoUserHaveSameNumber = originalUsers.stream().filter(x -> x.getContestChooseNumber().equals(randomWiningNumber)).collect(Collectors.toList());
 
-                        //SC2 pair of users- > one pair having same number and other pair having diff number
-                        //1 2 3 3
+                            List<ContestOrderDetail> finalAutomatedList3 = automatedUsers.stream().filter(x -> twoUserHaveSameNumber.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
 
-                        //SC3 all having diff number
-                        //1 2 3 3
+                            populateRandomTwoUsersWinner(contestDetail, finalAutomatedList3, twoUserHaveSameNumber);
 
+                        } else if (pairList.size() == 1) {
+                            //SC2 pair of users- > one pair having same number and other pair having diff number
+                            //1 2 3 3
+                            List<Long> chosePairNumberList = pairList.stream().map(ContestOrderDetail::getContestChooseNumber).collect(Collectors.toList());
+                            List<ContestOrderDetail> nonPairUsers = originalUsers.stream().filter(x -> chosePairNumberList.stream().noneMatch(y -> Objects.equals(y, x.getContestChooseNumber()))).collect(Collectors.toList());
+
+                            List<ContestOrderDetail> finalAutomatedList3 = automatedUsers.stream().filter(x -> originalUsers.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
+
+                            populateThreeWinners(contestDetail, finalAutomatedList3, nonPairUsers, pairList);
+
+
+                        } else {
+                            //SC3 all having diff number
+                            //1 2 3 3
+                            populateIfFourUserSelectedDiffNumbers(contestDetail, automatedUsers, originalUsers);
+
+                        }
 
 
                     default:
@@ -237,60 +250,101 @@ public class ContestScheduler {
         }
     }
 
+    private void populateIfFourUserSelectedDiffNumbers(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
+        List<ContestOrderDetail> finalAutomatedList3 = automatedUsers.stream().filter(x -> originalUsers.stream().noneMatch(y -> Objects.equals(y.getContestChooseNumber(), x.getContestChooseNumber()))).collect(Collectors.toList());
+
+        List<Long> randomAutoWinnerUsers = getRandomWinnerUsers(finalAutomatedList3, 2);
+        List<Long> randomOriginalWinnerUsers = getRandomWinnerUsers(originalUsers, 1);
+
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
+
+        int count = 1;
+        for (long userId : randomAutoWinnerUsers) {
+            if (count == 1) {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
+                count++;
+            } else {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
+            }
+        }
+        ContestOrderDetail secondOriginalWinner = originalUsers.stream().filter(x -> x.getUserId().equals(randomOriginalWinnerUsers.get(0))).findFirst().get();
+        secondOriginalWinner.setUserWin(true);
+        winnerList.add(ContestOrderWinner.builder().winnerUserId(secondOriginalWinner.getUserId()).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
+        contestDetail.setOrderWinnerList(winnerList);
+    }
+
+    private void populateThreeWinners(ContestDetail contestDetail, List<ContestOrderDetail> finalAutomatedList3, List<ContestOrderDetail> nonPairUsers, List<ContestOrderDetail> pairList) {
+
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
+
+        List<Long> firstAutomatedWinner = getRandomWinnerUsers(finalAutomatedList3, 1);
+        List<Long> secondOriginalWinner = getRandomWinnerUsers(nonPairUsers, 1);
+
+        //Automated should be first
+        winnerList.add(ContestOrderWinner.builder().winnerUserId(firstAutomatedWinner.get(0)).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
+
+        nonPairUsers.stream().filter(x -> Objects.equals(x.getUserId(), secondOriginalWinner.get(0))).findFirst().get().setUserWin(true);
+        winnerList.add(ContestOrderWinner.builder().winnerUserId(secondOriginalWinner.get(0)).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
+
+        // set 3rd Actual user
+        for (ContestOrderDetail orderDetail : pairList) {
+            orderDetail.setUserWin(true);
+            winnerList.add(ContestOrderWinner.builder().winnerUserId(orderDetail.getUserId()).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
+        }
+        contestDetail.setOrderWinnerList(winnerList);
+
+    }
+
     private void populateAllAutomatedUsersWinner(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers) {
+
         List<Long> winnerUserIds = getRandomWinnerUsers(automatedUsers, 3);
         int count = 1;
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
         for (Long userId : winnerUserIds) {
 
             if (count == 1) {
-                contestDetail.setFirstWinnerUserId(userId);
-                contestDetail.setFirstWinnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
                 count++;
             }
 
             if (count == 2) {
-                contestDetail.setSecondWinnerUserId(userId);
-                contestDetail.setSecondWinnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
                 count++;
             }
 
             if (count == 3) {
-                contestDetail.setThirdWinnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100);
-                contestDetail.setThirdWinnerUserId(userId);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
                 count++;
             }
         }
+        contestDetail.setOrderWinnerList(winnerList);
     }
 
-    private void populateOneUsersWinner (ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
+    private void populateOneUsersWinner(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
         List<Long> originalWinners = getRandomWinnerUsers(originalUsers, 1);
         List<Long> automatedWinners = getRandomWinnerUsers(automatedUsers, 2);
-
-
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
         //set automated 1st and 2nd
         int count = 1;
         for (Long userId : automatedWinners) {
 
             if (count == 1) {
-                contestDetail.setFirstWinnerUserId(userId);
-                contestDetail.setFirstWinnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
                 count++;
             }
 
             if (count == 2) {
-                contestDetail.setSecondWinnerUserId(userId);
-                contestDetail.setSecondWinnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
                 count++;
             }
         }
         // set 3rd Actual user
         for (Long userId : originalWinners) {
             originalUsers.stream().filter(x -> x.getId().equals(userId)).forEach(x -> x.setUserWin(true));
-
-            contestDetail.setThirdWinnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100);
-            contestDetail.setThirdWinnerUserId(userId);
+            winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
             count++;
         }
+        contestDetail.setOrderWinnerList(winnerList);
     }
 
     //originalUsers list having one actual winner and one automated user
@@ -298,9 +352,9 @@ public class ContestScheduler {
     private void populateRandomOneUsersWinner(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
 
 
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
         //set automated 1st
-        contestDetail.setFirstWinnerUserId(automatedUsers.get(0).getUserId());
-        contestDetail.setFirstWinnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100);
+        winnerList.add(ContestOrderWinner.builder().winnerUserId(automatedUsers.get(0).getUserId()).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
 
         List<Long> randomOneUserWinner = getRandomWinnerUsers(originalUsers, 2);
 
@@ -309,40 +363,71 @@ public class ContestScheduler {
         for (Long userId : randomOneUserWinner) {
 
             if (count == 1) {
-                contestDetail.setSecondWinnerUserId(userId);
-                contestDetail.setSecondWinnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
                 count++;
             }
 
             if (count == 2) {
-                contestDetail.setThirdWinnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100);
-                contestDetail.setThirdWinnerUserId(userId);
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
                 count++;
             }
         }
+
+        contestDetail.setOrderWinnerList(winnerList);
     }
 
-    private void populatePairUsersWinnerAsThird(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
+    private void populateRandomTwoUsersWinner(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
 
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
+        List<Long> automatedWinners = getRandomWinnerUsers(automatedUsers, 2);
+        //set automated 1st and 2nd
+        int count = 1;
+        for (Long userId : automatedWinners) {
 
+            if (count == 1) {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
+                count++;
+            }
+
+            if (count == 2) {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(userId).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
+                count++;
+            }
+
+        }
+
+        //two original user chosen same number then both are 3 rd winner
+        for (ContestOrderDetail user : originalUsers) {
+            user.setUserWin(true);
+            winnerList.add(ContestOrderWinner.builder().winnerUserId(user.getUserId()).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
+
+        }
+
+        contestDetail.setOrderWinnerList(winnerList);
+    }
+
+    /*private void populatePairUsersWinnerAsThird(ContestDetail contestDetail, List<ContestOrderDetail> automatedUsers, List<ContestOrderDetail> originalUsers) {
+
+        List<ContestOrderWinner> winnerList = new ArrayList<>();
         //set automated 1st
-        contestDetail.setFirstWinnerUserId(automatedUsers.get(0).getUserId());
-        contestDetail.setFirstWinnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100);
+        winnerList.add(ContestOrderWinner.builder().winnerUserId(automatedUsers.get(0).getUserId()).winningRank(WinningRank.FIRST).winnerAmount(((contestDetail.getEntryFee() * 5) * 95) / 100).build());
 
         List<Long> randomOneUserWinner = getRandomWinnerUsers(originalUsers, 2);
 
         //set automated 2nd and 3rd
-        int count = 1;
+        int count = 2;
         for (ContestOrderDetail orderDetail : originalUsers) {
 
-            orderDetail.setUserWin(true);
-            //TODO : if two user are 3rd thn maintain list instead of single entry
-            contestDetail.setThirdWinnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100);
-            contestDetail.setThirdWinnerUserId(orderDetail.getUserId());
-            count++;
+            if (count == 2) {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(orderDetail.getUserId()).winningRank(WinningRank.SECOND).winnerAmount(((contestDetail.getEntryFee() * 2.5) * 95) / 100).build());
+                count++;
+            } else if (count == 3) {
+                winnerList.add(ContestOrderWinner.builder().winnerUserId(orderDetail.getUserId()).winningRank(WinningRank.THIRD).winnerAmount(((contestDetail.getEntryFee() * 1.5) * 95) / 100).build());
+                count++;
+            }
         }
-
-    }
+        contestDetail.setOrderWinnerList(winnerList);
+    }*/
 
     public List<Long> getRandomWinnerUsers(List<ContestOrderDetail> contestOrderDetails, int winnerCount) {
 
@@ -353,8 +438,8 @@ public class ContestScheduler {
 
             ContestOrderDetail contestOrder = contestOrderDetails.get(random.nextInt(contestOrderDetails.size()));
 
-            if (!uniqueUserList.contains(contestOrder.getId())) {
-                uniqueUserList.add(contestOrder.getId());
+            if (!uniqueUserList.contains(contestOrder.getUserId())) {
+                uniqueUserList.add(contestOrder.getUserId());
             }
 
             if (uniqueUserList.size() == winnerCount) return uniqueUserList;

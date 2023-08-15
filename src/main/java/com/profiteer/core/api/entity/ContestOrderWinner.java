@@ -1,6 +1,7 @@
 package com.profiteer.core.api.entity;
 
 
+import lombok.Builder;
 import lombok.Data;
 
 import javax.persistence.*;
@@ -8,6 +9,7 @@ import javax.persistence.*;
 @Entity
 @Table(name = "contest_order_detail", indexes = { @Index(columnList = "id"), @Index(columnList = "contest_id") })
 @Data
+@Builder
 public class ContestOrderWinner {
 
     @Id
